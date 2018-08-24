@@ -630,9 +630,50 @@ class TreeRebuilder:
                          self.visit(node.orelse, newnode))
         return newnode
 
+    @staticmethod
+    def get_aliasing_import(name, parent):
+        """
+        Analyse parent's locals to see if an import is aliased
+        and corresponds to the beginning of name.
+        For example in:
+
+        import scipy as sp
+        import scipy.linalg
+
+        when visiting second import, name is 'scipy.linalg'
+        and begins with 'scipy' which is an import aliased as 'sp'.
+        So returns 'sp.linalg'
+        """
+        try:
+            for import_list in parent.locals.values():
+                for imp in import_list:
+                        for _name, _asname in imp.names:
+                            if name.startswith(_name + '.'):
+                                return name.replace(_name, _asname)
+            return None
+        except AttributeError:
+            return None
+
     def visit_import(self, node, parent):
         """visit a Import node by returning a fresh instance of it"""
         names = [(alias.name, alias.asname) for alias in node.names]
+
+        # Create an alias name if the name begins with a preceeding aliased import
+        # For example in :
+        # import scipy as sp
+        # import scipy.linalg
+        # The aliased name for the second import is sp.linalg
+        new_alias_map = {}
+        for _name, _asname in names:
+            # Do the aliasing only if the import is not already aliased
+            if _asname is None:
+                aliasing_import = self.get_aliasing_import(_name, parent)
+                if aliasing_import is not None:
+                    new_alias_map[(_name, _asname)] = (_name, aliasing_import)
+        for key, val in new_alias_map.items():
+            names.remove(key)
+            names.append(val)
+
         newnode = nodes.Import(names, getattr(node, 'lineno', None),
                                getattr(node, 'col_offset', None), parent)
         # save import names in parent's locals:
