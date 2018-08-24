@@ -110,6 +110,8 @@ class ImportFromMixin(FilterStmtsMixin):
                 _asname = name
             if asname == _asname:
                 return name
+            if _asname.startswith(asname + '.'):
+                return asname
         raise exceptions.AttributeInferenceError(
             'Could not find original name for {attribute} in {target!r}',
             target=self, attribute=asname)
