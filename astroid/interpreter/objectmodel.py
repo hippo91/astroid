@@ -794,6 +794,30 @@ class PropertyModel(ObjectModel):
         return property_accessor
 
     @property
+    def attr_fset(self):
+        from astroid.scoped_nodes import FunctionDef
+
+        func = self._instance
+        func_associates = [_m for _m in func.parent.get_children() if _m.name == func.name and _m is not func.function]
+        setter_func = func_associates[-1]
+
+        class PropertyFuncAccessor(FunctionDef):
+            def infer_call_result(self, caller=None, context=None):
+                nonlocal setter_func
+                if caller and len(caller.args) != 2:
+                    raise exceptions.InferenceError(
+                        "fset() needs two arguments", target=self, context=context
+                    )
+
+                yield from setter_func.infer_call_result(
+                    caller=caller, context=context
+                )
+
+        property_accessor = PropertyFuncAccessor(name="fset", parent=self._instance)
+        property_accessor.postinit(args=setter_func.args, body=setter_func.body)
+        return property_accessor
+
+    @property
     def attr_setter(self):
         return self._init_function("setter")
 
